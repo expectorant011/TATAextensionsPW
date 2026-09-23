@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>확장프로그램 비밀번호 조회</title>
+<style>
+  :root {
+    /* 쯔바 리사이징툴(image-shrink-web)과 같은 "쯔바" win98 팔레트 */
+    --surface:#ffebee; --face:#fffafb; --highlight:#fefafb;
+    --shadow:#cb2a4a; --frame:#ff4d6d;
+    --title-l:#ff6b89; --title-r:#fff4d6; --title-text:#ffffff;
+    --text:#4a3f3f; --text-dim:#6a3840;
+    --field-bg:#fff5f5; --scroll-thumb:#dedede; --scroll-track:#ffffff;
+    --danger:#c04040;
+    --border-r: inset -1px -1px var(--frame), inset 1px 1px var(--highlight);
+    --border-ri: inset -2px -2px var(--shadow), inset 2px 2px var(--face);
+    --border-s: inset -1px -1px var(--highlight), inset 1px 1px var(--frame);
+    --border-si: inset -2px -2px var(--face), inset 2px 2px var(--shadow);
+    --border-w: inset -1px -1px var(--frame), inset 1px 1px var(--face);
+    --border-wi: inset -2px -2px var(--shadow), inset 2px 2px var(--highlight);
+    --bg: #ffcccc;
+    font-family:"굴림","Gulim","MS Sans Serif",Arial,sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-size: 12px; -webkit-font-smoothing: none; }
+  ::-webkit-scrollbar { width: 16px; height: 16px; }
+  ::-webkit-scrollbar-track { background: var(--scroll-track); }
+  ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); box-shadow: var(--border-r), var(--border-ri); }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 20px 16px 64px; }
+  .titlebar {
+    position: sticky; top: 0; z-index: 10;
+    background: linear-gradient(90deg, var(--title-l), var(--title-r));
+    border-bottom: 2px solid var(--frame);
+  }
+  .titlebar-inner { max-width: 480px; margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 8px; }
+  .titlebar h1 { font-size: 18px; margin: 0; font-weight: 900; color: var(--title-text); letter-spacing: .3px; }
+  p.desc { color: var(--text-dim); margin-top: 0; margin-bottom: 16px; font-size: 12px; line-height: 1.6; padding: 0 2px; }
+  .card { background: var(--surface); box-shadow: var(--border-w), var(--border-wi); padding: 0 14px 14px; margin-bottom: 16px; }
+  .card.win-collapsed { padding-bottom: 0; }
+  .card.win-collapsed > *:not(.card-title) { display: none !important; }
+  .card-title {
+    font-size: 12px; color: var(--title-text); margin: 0 -14px 12px; font-weight: 700;
+    padding: 3px 6px; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    background: linear-gradient(90deg, var(--title-l), var(--title-r));
+    box-shadow: var(--border-r), var(--border-ri);
+  }
+  .card-title .win-btns { display: flex; gap: 2px; margin-left: auto; flex-shrink: 0; }
+  .card-title .win-btn {
+    width: 16px; height: 14px; padding: 0; border: none; cursor: pointer;
+    background: var(--surface); color: var(--text);
+    box-shadow: var(--border-r), var(--border-ri);
+    font-size: 8px; line-height: 1; display: flex; align-items: center; justify-content: center;
+    font-family: inherit;
+  }
+  .card-title .win-btn:active { box-shadow: var(--border-s), var(--border-si); }
+  .card-title .win-max::after { content: ''; display: block; width: 7px; height: 6px; border: 1px solid currentColor; }
+  .card-title span.card-title-text { flex: 1; min-width: 0; }
+  .hint { font-size: 11px; color: var(--text-dim); margin: 0 0 10px; line-height: 1.6; }
+  form { display: flex; gap: 8px; }
+  input[type=text] {
+    flex: 1; min-width: 0; background: var(--field-bg); border: none; color: var(--text);
+    box-shadow: var(--border-s), var(--border-si);
+    padding: 7px 8px; font-size: 13px; font-family: inherit; outline: none;
+  }
+  button.primary, button.ghost {
+    border: none; background: var(--surface); color: var(--text);
+    box-shadow: var(--border-r), var(--border-ri);
+    cursor: pointer; font-family: inherit; font-weight: 700; flex-shrink: 0;
+  }
+  button.primary { padding: 7px 16px; font-size: 13px; }
+  button.ghost { padding: 4px 10px; font-size: 11px; }
+  button.primary:hover, button.ghost:hover { background: var(--highlight); }
+  button.primary:active, button.ghost:active { box-shadow: var(--border-s), var(--border-si); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #result { margin-top: 12px; }
+  #result:empty { display: none; }
+  .pw {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px; background: var(--face); box-shadow: var(--border-r), var(--border-ri);
+  }
+  .pw span { font-family: Consolas, "굴림체", monospace; font-size: 16px; font-weight: 700; word-break: break-all; }
+  .msg { color: var(--danger); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="titlebar"><div class="titlebar-inner"><h1>확장프로그램 비밀번호 조회</h1></div></div>
+<div class="wrap">
+  <p class="desc">악용 방지를 위해 조회 시각, 입력한 아이디, 조회 결과가 기록됩니다. 기록은 운영자만 볼 수 있으며 외부에 공개되지 않습니다.</p>
+
+  <div class="card">
+    <div class="card-title"><span class="card-title-text">아이디 입력</span><span class="win-btns"><button type="button" class="win-btn win-min" title="최소화">━</button><button type="button" class="win-btn win-max" title="최대화"></button><button type="button" class="win-btn win-close" title="닫기">✕</button></span></div>
+    <p class="hint">본인 트위터 아이디를 입력하세요. (@ 포함 여부, 대소문자 무관)</p>
+    <form id="f">
+      <input type="text" id="id" placeholder="아이디" autocomplete="off" spellcheck="false" autofocus />
+      <button type="submit" class="primary">조회</button>
+    </form>
+    <div id="result"></div>
+  </div>
+</div>
+
+<script>
+// ===== Apps Script 웹 앱 배포 후 받은 URL을 넣으세요 =====
+const API_URL = "여기에_웹앱_URL_붙여넣기";
+// ==========================================================
+
+const input = document.getElementById('id');
+const result = document.getElementById('result');
+const submitBtn = document.querySelector('#f button');
+
+const ERRORS = {
+  notfound: '등록되지 않은 아이디입니다.',
+  limit: '이미 조회한 아이디입니다.',
+  empty: '아이디를 입력하세요.',
+};
+
+function showMsg(text) {
+  result.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.textContent = text;
+  result.append(div);
+}
+
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = input.value.trim();
+  result.innerHTML = '';
+  if (!id) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '조회 중...';
+  try {
+    const res = await fetch(API_URL + '?id=' + encodeURIComponent(id));
+    const data = await res.json();
+    if (!data.ok) return showMsg(ERRORS[data.error] || '조회에 실패했습니다.');
+
+    const box = document.createElement('div');
+    box.className = 'pw';
+    const span = document.createElement('span');
+    span.textContent = data.password;
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'ghost';
+    copy.textContent = '복사';
+    copy.onclick = () => navigator.clipboard.writeText(data.password).then(() => copy.textContent = '복사됨');
+    box.append(span, copy);
+    result.append(box);
+  } catch {
+    showMsg('서버에 연결하지 못했습니다. 잠시 후 다시 시도하세요.');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '조회';
+  }
+});
+
+// 창 버튼: ━ 접기, □ 펼치기, ✕ 입력/결과 지우기
+document.querySelectorAll('.win-min').forEach(btn => btn.addEventListener('click', () => btn.closest('.card').classList.toggle('win-collapsed')));
+document.querySelectorAll('.win-max').forEach(btn => btn.addEventListener('click', () => btn.closest('.card').classList.remove('win-collapsed')));
+document.querySelectorAll('.win-close').forEach(btn => btn.addEventListener('click', () => { input.value = ''; result.innerHTML = ''; }));
+</script>
+</body>
+</html>

@@ -6,7 +6,6 @@
 <title>확장프로그램 비밀번호 조회</title>
 <style>
   :root {
-    /* 쯔바 리사이징툴(image-shrink-web)과 같은 "쯔바" win98 팔레트 */
     --surface:#ffebee; --face:#fffafb; --highlight:#fefafb;
     --shadow:#cb2a4a; --frame:#ff4d6d;
     --title-l:#ff6b89; --title-r:#fff4d6; --title-text:#ffffff;
@@ -81,6 +80,13 @@
   }
   .pw span { font-family: Consolas, "굴림체", monospace; font-size: 16px; font-weight: 700; word-break: break-all; }
   .msg { color: var(--danger); font-size: 12px; }
+  .apply { margin-top: 10px; padding: 10px; background: var(--face); box-shadow: var(--border-s), var(--border-si); }
+  .apply-title { font-weight: 700; margin-bottom: 4px; }
+  .apply .field { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .apply .field label { width: 44px; flex-shrink: 0; font-size: 11px; color: var(--text-dim); }
+  .apply .actions { display: flex; justify-content: flex-end; }
+  .apply-status { font-size: 12px; margin-top: 6px; }
+  .apply-status.error { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -100,7 +106,6 @@
 </div>
 
 <script>
-// ===== Apps Script 웹 앱 배포 후 받은 URL을 넣으세요 =====
 const API_URL = "https://script.google.com/macros/s/AKfycbzUhAPisD5O2mNXU0kuJ1-vHIT17QvTPKEcpv7KR9P_BArGgZ_fitHCWaBiRT01uZ6fSg/exec";
 // ==========================================================
 
@@ -122,6 +127,52 @@ function showMsg(text) {
   result.append(div);
 }
 
+// 조회 실패 시 나오는 화이트리스트 신청 박스
+function buildApplyBox(id) {
+  const box = document.createElement('div');
+  box.className = 'apply';
+  box.innerHTML = `
+    <div class="apply-title">화이트리스트 신청</div>
+    <p class="hint">닉네임과 맞팔로우 상태의 X(구 Twitter) 아이디를 남기면 운영자에게 전달됩니다. 같은 아이디는 1일 1회까지만 화이트리스트 신청 가능합니다.</p>
+    <div class="field"><label>닉네임</label><input type="text" class="nick" maxlength="30" autocomplete="off" spellcheck="false" /></div>
+    <div class="field"><label>아이디</label><input type="text" class="aid" maxlength="50" autocomplete="off" spellcheck="false" /></div>
+    <div class="actions"><button type="button" class="primary">신청</button></div>
+    <div class="apply-status"></div>`;
+  const nick = box.querySelector('.nick');
+  const aid = box.querySelector('.aid');
+  const btn = box.querySelector('button');
+  const status = box.querySelector('.apply-status');
+  aid.value = id;
+
+  const setStatus = (text, isError) => {
+    status.textContent = text;
+    status.classList.toggle('error', isError);
+  };
+
+  btn.onclick = async () => {
+    const n = nick.value.trim();
+    const a = aid.value.trim();
+    if (!n || !a) return setStatus('닉네임과 아이디를 모두 입력하세요.', true);
+    btn.disabled = true;
+    btn.textContent = '신청 중...';
+    try {
+      const res = await fetch(API_URL + '?action=apply&nick=' + encodeURIComponent(n) + '&id=' + encodeURIComponent(a));
+      const data = await res.json();
+      if (data.ok) {
+        setStatus('신청되었습니다. 운영자가 확인 후 등록합니다.', false);
+        btn.textContent = '신청 완료';
+        return;
+      }
+      setStatus(data.error === 'dup' ? '오늘은 이 아이디로 이미 신청했습니다. 내일 다시 시도해 주세요.' : '신청에 실패했습니다.', true);
+    } catch {
+      setStatus('서버에 연결하지 못했습니다. 잠시 후 다시 시도하세요.', true);
+    }
+    btn.disabled = false;
+    btn.textContent = '신청';
+  };
+  return box;
+}
+
 document.getElementById('f').addEventListener('submit', async e => {
   e.preventDefault();
   const id = input.value.trim();
@@ -133,7 +184,11 @@ document.getElementById('f').addEventListener('submit', async e => {
   try {
     const res = await fetch(API_URL + '?id=' + encodeURIComponent(id));
     const data = await res.json();
-    if (!data.ok) return showMsg(ERRORS[data.error] || '조회에 실패했습니다.');
+    if (!data.ok) {
+      showMsg(ERRORS[data.error] || '조회에 실패했습니다.');
+      if (data.error === 'notfound') result.append(buildApplyBox(id));
+      return;
+    }
 
     const box = document.createElement('div');
     box.className = 'pw';
